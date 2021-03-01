@@ -1,0 +1,62 @@
+#!/usr/bin/env perl
+
+use lib './lib';
+use Lucy::Simple;
+use Lucy::Search::SortSpec;
+use Lucy::Search::SortRule;
+use Data::Dumper;
+
+
+my $index_path = $ARGV[0] || die;
+my $search_query = $ARGV[1] || die;
+
+
+my $index = Lucy::Simple->new(
+    path     => $index_path,
+    language => 'en',
+);
+ 
+my $sort_spec = Lucy::Search::SortSpec->new(
+	rules => [
+		Lucy::Search::SortRule->new( field => 'date' ),
+		Lucy::Search::SortRule->new( type  => 'doc_id' ),
+	],
+);
+
+my $total_hits = $index->search(
+	query      => $search_query,
+	offset     => 0,
+	num_wanted => 10,
+	#sort_spec  => $sort_spec,
+);
+ 
+print "total hits $total_hits\n";
+print "\n";
+
+while ( my $hit = $index->next )
+{
+	for my $attribute (sort keys %$hit)
+	{
+		printf "%s %s\n", $attribute, $hit->{$attribute};
+	}
+	print "\n";
+}
+
+
+#use Lucy::Highlight::Highlighter;
+#
+#my $searcher = Lucy::Search::IndexSearcher->new( 
+#    index => $index_path,
+#);
+#my $hits = $searcher->hits(query => $search_query, offset => 0, num_wanted=> 10,);
+#my $highlighter = Lucy::Highlight::Highlighter->new(
+#	searcher => $searcher,
+#	query    => $search_query,
+#	field    => 'content',
+#	excerpt_length => 200,
+#);
+#print "total", $hits->total_hits;
+#while ( my $hit = $hits->next ) {
+#    my $excerpt = $highlighter->create_excerpt($hit);
+#    print $excerpt;
+#}

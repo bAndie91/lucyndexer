@@ -1,0 +1,86 @@
+#!/usr/bin/env perl
+
+use lib './lib';
+use Lucy::Index::Indexer;
+use Lucy::Plan::Schema;
+use Lucy::Plan::FullTextType;
+use Lucy::Analysis::EasyAnalyzer;
+use Data::Dumper;
+
+
+my $index_path = $ARGV[0] || die;
+
+
+my $schema = Lucy::Plan::Schema->new;
+my $tokenizer = Lucy::Analysis::StandardTokenizer->new;
+my $normalizer = Lucy::Analysis::Normalizer->new;
+my $stemmer_1 = Lucy::Analysis::SnowballStemmer->new( language => 'en' );
+my $stemmer_2 = Lucy::Analysis::SnowballStemmer->new( language => 'hu' );
+my $analyzer = Lucy::Analysis::PolyAnalyzer->new(analyzers => [ $tokenizer, $normalizer, $stemmer_1, $stemmer_2, ]);
+my $type_location = Lucy::Plan::StringType->new(
+	indexed => 0,
+	stored => 1,
+	sortable => 0,
+);
+my $type_attribute = Lucy::Plan::FullTextType->new(
+	analyzer => $analyzer,
+	indexed => 1,
+	stored => 1,
+	sortable => 1,
+	highlightable => 1,
+);
+my $type_content = Lucy::Plan::FullTextType->new(
+	analyzer => $analyzer,
+	indexed => 1,
+	stored => 0,
+	highlightable => 1,
+	sortable => 0,
+);
+$schema->spec_field( name => 'location', type => $type_location );
+$schema->spec_field( name => 'title', type => $type_attribute );
+$schema->spec_field( name => 'content', type => $type_content );
+
+
+my $indexer;
+eval {
+	$indexer = Lucy::Index::Indexer->new(
+		index => $index_path,
+	);
+	$schema = $indexer->get_schema;
+} or $indexer = Lucy::Index::Indexer->new(
+	index  => $index_path,
+	schema => $schema,
+	create => 1,
+);
+
+
+my %document;
+my $n_docs = 0;
+
+while(<STDIN>)
+{
+	my ($datatype) = /^(\S+) ?/;
+	next if not $datatype;
+   	my $data = $';
+   	chomp $data;
+	
+	if($datatype eq 'end')
+	{
+	    $indexer->add_doc(doc => \%document);
+	    $n_docs++;
+	    %document = ();
+    }
+    else
+    {
+		if(not grep {$datatype eq $_} @{$schema->all_fields})
+		{
+			warn "adding field '$datatype'\n";
+			$schema->spec_field( name => $datatype, type => $type_attribute );
+		}
+		$document{$datatype} .= "\n" if exists $document{$datatype};
+		$document{$datatype} .= $data;
+	}
+}
+$indexer->commit;
+
+warn "indexed $n_docs documents.\n";

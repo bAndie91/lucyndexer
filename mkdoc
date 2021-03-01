@@ -1,0 +1,104 @@
+#!/usr/bin/env perl
+
+use Data::Dumper;
+use Email::MIME;
+use Encode qw/decode_utf8 encode_utf8/;
+use HTML::Entities;
+use IPC::Open2;
+
+@sender_headers = ('From', 'Sender', 'X-Sender', 'Return-Path', 'Reply-To');
+@recipient_headers = ('To', 'Cc', 'Delivered-To');
+
+
+sub uniq
+{
+	return keys { map {$_=>undef} @_ };
+}
+
+
+my $filepath = $ARGV[0];
+my $rawmail;
+
+{
+	open my $fh, '<', $filepath or die $!;
+	local $/ = undef;
+	$rawmail = <$fh>;
+	close $fh;
+}
+my $email = Email::MIME->new($rawmail);
+
+
+my %attribute;
+
+$attribute{title} = encode_utf8(join "\n", $email->header('Subject'));
+$attribute{sender} = encode_utf8(join "\n", grep {$_} map {join "\n", $email->header($_)} @sender_headers);
+$attribute{recipient} = encode_utf8(join "\n", grep {$_} map {join "\n", $email->header($_)} @recipient_headers);
+
+@mime_parts = $email->subparts;
+if(@mime_parts == 0)
+{
+	$attribute{content} = join "\n", $email->body;
+}
+else {
+	for my $part (@mime_parts)
+	{
+		my ($mime_type) = $part->content_type =~ /^([^;]+)/;
+		my $attachment_name = $part->filename;
+		my @filter_cmd = ();
+		
+		if($attachment_name)
+		{
+			push @{$attribute{attachment}}, "$attachment_name $mime_type";
+		}
+		
+		if($mime_type eq 'text/plain')
+		{
+			push @{$attribute{content}}, $part->body;
+		}
+		elsif($mime_type eq 'text/html')
+		{
+			my $html = $part->body;
+			# a good enough html parser
+			$html =~ s{<(style|script)\b.*?(</(?1)\b.*>)}{}gis;
+			$html =~ s{</?(td|tr|th|form|br|hr|p)\b.*?>}{ }g;
+			$html =~ s{<img[^>]*\balt=([^'"`]\S*|.[^'"`]*).*?>}{ $1 }g;
+			$html =~ s{<table[^>]*\bsummary=([^'"`]\S*|.[^'"`]*).*?>}{ $1 }g;
+			$html =~ s{<.*?>}{}g;
+			$html = HTML::Entities::decode($html);
+			$html =~ s/ +/ /g;
+			push @{$attribute{content}}, $html;
+		}
+		elsif($mime_type =~ m{^(image|video)/})
+		{ }
+		elsif($mime_type eq 'application/pdf') {
+			@filter_cmd = qw{pdftotext --strict-format - -};
+		}
+		elsif($mime_type eq 'application/rtf') {
+			@filter_cmd = qw{unrtf --text /dev/stdin};
+		}
+		
+		if(@filter_cmd)
+		{
+			my $pid = open2(my $filter_out, my $filter_in, @filter_cmd);
+			print {$filter_in} $part->body;
+			close $filter_in;
+			local $/ = undef;
+			push @{$attribute{content}}, <$filter_out>;
+			
+			waitpid( $pid, 0 );
+			my $child_exit_status = $? >> 8;
+		}
+	}
+	
+	$attribute{attachment} = encode_utf8( join "\n", @{$attribute{attachment}} ) if $attribute{attachment};
+	$attribute{content} = join "\n", @{$attribute{content}} if $attribute{content};
+}
+
+
+
+print "location $_\n" for split /\n/, $filepath;
+for my $attr (keys %attribute)
+{
+	print "$attr $_\n" for split /\n/, $attribute{$attr};
+}
+print "end\n";
