@@ -1,0 +1,21 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+set -u
+
+timestampfile=~/Mail/.lucyndex-last-indexing-started
+date -R > "$timestampfile.new"
+
+find ~/Mail/new/ \( -type d \( \
+	-iname spam -or -iname trash -or -iname kuka -or -iname 'törölt elemek' \
+	-or -name .getmail \
+	\) -prune -false \) -or \( \
+	-newer "$timestampfile" \
+	-type f \
+	! -name maildirfs.cache \
+	\) |\
+./mkdoc |\
+./lucyndex index/
+
+mv "$timestampfile.new" "$timestampfile"

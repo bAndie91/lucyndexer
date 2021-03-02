@@ -17,6 +17,7 @@ my $normalizer = Lucy::Analysis::Normalizer->new;
 my $stemmer_1 = Lucy::Analysis::SnowballStemmer->new( language => 'en' );
 my $stemmer_2 = Lucy::Analysis::SnowballStemmer->new( language => 'hu' );
 my $analyzer = Lucy::Analysis::PolyAnalyzer->new(analyzers => [ $tokenizer, $normalizer, $stemmer_1, $stemmer_2, ]);
+
 my $type_location = Lucy::Plan::StringType->new(
 	indexed => 0,
 	stored => 1,
@@ -27,7 +28,6 @@ my $type_attribute = Lucy::Plan::FullTextType->new(
 	indexed => 1,
 	stored => 1,
 	sortable => 1,
-	highlightable => 1,
 );
 my $type_content = Lucy::Plan::FullTextType->new(
 	analyzer => $analyzer,
@@ -36,6 +36,7 @@ my $type_content = Lucy::Plan::FullTextType->new(
 	highlightable => 1,
 	sortable => 0,
 );
+
 $schema->spec_field( name => 'location', type => $type_location );
 $schema->spec_field( name => 'title', type => $type_attribute );
 $schema->spec_field( name => 'content', type => $type_content );
@@ -54,8 +55,30 @@ eval {
 );
 
 
+my $key_schema = Lucy::Plan::Schema->new;
+$key_schema->spec_field( name => 'location', type => Lucy::Plan::StringType->new( indexed => 1, stored => 1, ), );
+my $key_index_path = "$index_path/keys_index";
+sub new_key_indexer { Lucy::Index::Indexer->new( index => $key_index_path, schema => $key_schema, create => 1, ); }
+my $key_indexer = new_key_indexer();
+sub new_key_searcher { return Lucy::Search::IndexSearcher->new(index => $key_index_path); }
+my $key_searcher; if(not eval { $key_searcher = new_key_searcher(); 1; })
+{ $key_indexer->commit; $key_indexer = new_key_indexer(); $key_searcher = new_key_searcher(); }
+my $key_query_parser = Lucy::Search::QueryParser->new(schema => $key_indexer->get_schema);
+
+sub key_exists
+{
+	my $key = shift;
+	my $query = $key_query_parser->parse("\"$key\"");
+	my $hits = $key_searcher->hits(query => $query, offset => 0, num_wanted => 1);
+	return $hits->total_hits;
+}
+
+
+
 my %document;
 my $n_docs = 0;
+my $n_dups = 0;
+my $time0 = time;
 
 while(<STDIN>)
 {
@@ -66,8 +89,15 @@ while(<STDIN>)
 	
 	if($datatype eq 'end')
 	{
-	    $indexer->add_doc(doc => \%document);
-	    $n_docs++;
+		if(key_exists($document{'location'}))
+		{
+			$n_dups++;
+		}
+		else {
+			$indexer->add_doc(doc => \%document);
+			$key_indexer->add_doc(doc => {'location' => $document{'location'},});
+			$n_docs++;
+		}
 	    %document = ();
     }
     else
@@ -80,7 +110,17 @@ while(<STDIN>)
 		$document{$datatype} .= "\n" if exists $document{$datatype};
 		$document{$datatype} .= $data;
 	}
+	
+	my $time = time;
+	if($time - $time0 > 1)
+	{
+		warn "processed $n_docs documents, $n_dups duplicates...\n";
+		$time0 = $time;
+	}
 }
 $indexer->commit;
+$indexer->optimize;
+$key_indexer->commit;
+$key_indexer->optimize;
 
-warn "indexed $n_docs documents.\n";
+warn "indexed $n_docs documents ($n_dups duplicates skipped).\n";

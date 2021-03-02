@@ -1,46 +1,64 @@
 #!/usr/bin/env perl
 
 use lib './lib';
-use Lucy::Simple;
-use Lucy::Search::SortSpec;
-use Lucy::Search::SortRule;
+#use Lucy::Simple;
+use Lucy::Search::IndexSearcher;
+#use Lucy::Search::SortSpec;
+#use Lucy::Search::SortRule;
 use Data::Dumper;
+use LucyX::Suggester;
+use Encode qw/decode_utf8 encode_utf8/;
+
 
 
 my $index_path = $ARGV[0] || die;
-my $search_query = $ARGV[1] || die;
+shift @ARGV;
+@ARGV or die "Usage: $0 <index-location> [search-terms...]\n";
+my $search_query = join " ", @ARGV;
 
 
-my $index = Lucy::Simple->new(
-    path     => $index_path,
-    language => 'en',
-);
+my $index = Lucy::Search::IndexSearcher->new(index => $index_path);
  
-my $sort_spec = Lucy::Search::SortSpec->new(
-	rules => [
-		Lucy::Search::SortRule->new( field => 'date' ),
-		Lucy::Search::SortRule->new( type  => 'doc_id' ),
-	],
-);
+#my $sort_spec = Lucy::Search::SortSpec->new(
+#	rules => [
+#		Lucy::Search::SortRule->new( field => 'date' ),
+#		Lucy::Search::SortRule->new( type  => 'doc_id' ),
+#	],
+#);
 
-my $total_hits = $index->search(
-	query      => $search_query,
+my $query_parser = Lucy::Search::QueryParser->new(
+    schema         => $index->get_schema,
+    #default_boolop => 'AND',  # default: 'OR'
+);
+$query_parser->set_heed_colons(1);
+
+my $query = $query_parser->parse($search_query);
+
+my $hits = $index->hits(
+	query      => $query,
 	offset     => 0,
-	num_wanted => 10,
+	num_wanted => 25,
 	#sort_spec  => $sort_spec,
 );
- 
-print "total hits $total_hits\n";
+
+my $suggester = LucyX::Suggester->new( indexes => [ $index_path ] );
+my $suggestions = $suggester->suggest($search_query);
+
+printf "query %s\n", $search_query;
+printf "total %s\n", $hits->total_hits;
+printf "suggestion %s\n", encode_utf8($_) for @$suggestions;
 print "\n";
 
-while ( my $hit = $index->next )
+while( my $hit = $hits->next )
 {
+	printf "score %.2f\n", $hit->get_score;
 	for my $attribute (sort keys %$hit)
 	{
-		printf "%s %s\n", $attribute, $hit->{$attribute};
+		printf "%s %s\n", $attribute, split /\n/, $hit->{$attribute};
 	}
 	print "\n";
 }
+
 
 
 #use Lucy::Highlight::Highlighter;
@@ -55,8 +73,8 @@ while ( my $hit = $index->next )
 #	field    => 'content',
 #	excerpt_length => 200,
 #);
-#print "total", $hits->total_hits;
 #while ( my $hit = $hits->next ) {
 #    my $excerpt = $highlighter->create_excerpt($hit);
+#    print Dumper $hit;
 #    print $excerpt;
 #}
