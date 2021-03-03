@@ -27,12 +27,14 @@ my $index = Lucy::Search::IndexSearcher->new(index => $index_path);
 #);
 
 my $query_parser = Lucy::Search::QueryParser->new(
-    schema         => $index->get_schema,
-    #default_boolop => 'AND',  # default: 'OR'
+	schema         => $index->get_schema,
+	default_boolop => 'AND',
 );
 $query_parser->set_heed_colons(1);
 
+$search_query =~ s/,/ OR /g;
 my $query = $query_parser->parse($search_query);
+#warn Dumper $query->dump;
 
 my $hits = $index->hits(
 	query      => $query,

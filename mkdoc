@@ -12,6 +12,7 @@ $Carp::MaxArgLen = 512;
 
 binmode STDIN,  ':utf8';
 binmode STDOUT, ':utf8';
+binmode STDERR, ':utf8';
 
 @title_headers = ('Subject');
 @sender_headers = ('From', 'Sender', 'X-Sender', 'Return-Path', 'Reply-To');
@@ -29,7 +30,9 @@ sub get_body_safe
 {
 	my $email = shift;
 	my $body;
-	eval { $body = $email->body_str; 1; } or $body = $email->body;
+	eval { $body = $email->body_str; 1; }
+	or eval { $body = $email->body; 1; }
+	or $body = decode_utf8 $email->body_raw;
 	return $body;
 }
 
