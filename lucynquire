@@ -75,6 +75,7 @@ $search_query =~ s/,/ OR /g;
 my $query = $query_parser->parse($search_query);
 my $parsed_query_string = dump_query $query->dump;
 #warn Dumper $query->dump, $parsed_query_string;
+#warn Dumper $index->get_schema->dump;
 
 my $hits = $index->hits(
 	query      => $query,
