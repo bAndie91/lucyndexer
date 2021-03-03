@@ -57,7 +57,7 @@ sub harvest_data
 	
 	if($mime_type eq 'text/html')
 	{
-		my $html = $mime_part->body;
+		my $html = $mime_part->body_str;
 		# a good enough html parser
 		$html =~ s{<(style|script)\b.*?(</(?1)\b.*?>)}{}gis;
 		$html =~ s{</?(td|tr|th|form|br|hr|p)\b.*?>}{ }gi;
@@ -70,7 +70,7 @@ sub harvest_data
 	}
 	elsif($mime_type =~ m{^text/} or $mime_type =~ m{^application/(ics|x-(sh))$})
 	{
-		push @{$attr_ref->{'content'}}, encode_utf8($mime_part->body);
+		push @{$attr_ref->{'content'}}, $mime_part->body_str;
 	}
 	elsif($mime_type ~~ @non_textual_types)
 	{
@@ -124,7 +124,7 @@ sub harvest_data
 	if(@filter_cmd)
 	{
 		my $pid = open2(my $filter_out, my $filter_in, @filter_cmd);
-		print {$filter_in} $mime_part->body;
+		print {$filter_in} $mime_part->body_str;
 		close $filter_in;
 		local $/ = undef;
 		push @{$attr_ref->{'content'}}, <$filter_out>;
