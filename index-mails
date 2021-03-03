@@ -7,6 +7,11 @@ set -u
 timestampfile=~/Mail/.lucyndex-last-indexing-started
 date -R > "$timestampfile.new"
 
+if [ -s "$timestampfile" ]
+then
+	echo "indexing Emails since $(cat "$timestampfile")" >&2
+fi
+
 find ~/Mail/new/ \( -type d \( \
 	-iname spam -or -iname trash -or -iname kuka -or -iname 'törölt elemek' \
 	-or -name .getmail \

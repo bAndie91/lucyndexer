@@ -13,10 +13,12 @@ my $index_path = $ARGV[0] || die;
 
 my $schema = Lucy::Plan::Schema->new;
 my $tokenizer = Lucy::Analysis::StandardTokenizer->new;
-my $normalizer = Lucy::Analysis::Normalizer->new;
-my $stemmer_1 = Lucy::Analysis::SnowballStemmer->new( language => 'en' );
-my $stemmer_2 = Lucy::Analysis::SnowballStemmer->new( language => 'hu' );
-my $analyzer = Lucy::Analysis::PolyAnalyzer->new(analyzers => [ $tokenizer, $normalizer, $stemmer_1, $stemmer_2, ]);
+my $normalizer = Lucy::Analysis::Normalizer->new( normalization_form => 'NFKC', case_fold => 1, strip_accents => 1 );
+my $stemmer_1 = Lucy::Analysis::SnowballStemmer->new( language => 'hu' );
+my $stemmer_2 = Lucy::Analysis::SnowballStemmer->new( language => 'en' );
+my $stopfilter_1 = Lucy::Analysis::SnowballStopFilter->new( language => 'hu' );
+my $stopfilter_2 = Lucy::Analysis::SnowballStopFilter->new( language => 'en' );
+my $analyzer = Lucy::Analysis::PolyAnalyzer->new(analyzers => [ $normalizer, $tokenizer, $stemmer_1, $stemmer_2, $stopfilter_1, $stopfilter_2, ]);
 
 my $type_location = Lucy::Plan::StringType->new(
 	indexed => 0,
