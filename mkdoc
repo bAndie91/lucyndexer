@@ -10,6 +10,7 @@ use IPC::Open2;
 @title_headers = ('Subject');
 @sender_headers = ('From', 'Sender', 'X-Sender', 'Return-Path', 'Reply-To');
 @recipient_headers = ('To', 'Cc', 'Delivered-To');
+@non_textual_types = (qr{^(image|video|audio)/}, qr{^application/(x-)?(pgp|pkcs7)-signature$}, qr{^application/octet-?stream$});
 
 
 sub uniq
@@ -43,6 +44,7 @@ sub harvest_data
 	$mime_type = lc $mime_type;
 	$mime_type = 'text/plain' if not $mime_type;
 	my $part_name = $mime_part->filename;
+	($part_name) = $mime_part->header('Content-ID') if not $part_name;
 	my @filter_cmd = ();
 	my @subparts = $mime_part->subparts;
 	
@@ -57,22 +59,22 @@ sub harvest_data
 	{
 		my $html = $mime_part->body;
 		# a good enough html parser
-		$html =~ s{<(style|script)\b.*?(</(?1)\b.*>)}{}gis;
-		$html =~ s{</?(td|tr|th|form|br|hr|p)\b.*?>}{ }g;
-		$html =~ s{<img[^>]*\balt=([^'"`]\S*|.[^'"`]*).*?>}{ $1 }g;
-		$html =~ s{<table[^>]*\bsummary=([^'"`]\S*|.[^'"`]*).*?>}{ $1 }g;
-		$html =~ s{<.*?>}{}g;
+		$html =~ s{<(style|script)\b.*?(</(?1)\b.*?>)}{}gis;
+		$html =~ s{</?(td|tr|th|form|br|hr|p)\b.*?>}{ }gi;
+		$html =~ s{<img[^>]*\balt=([^'"`]\S*|.[^'"`]*).*?>}{ $1 }gi;
+		$html =~ s{<table[^>]*\bsummary=([^'"`]\S*|.[^'"`]*).*?>}{ $1 }gi;
+		$html =~ s{<.*?>}{}gs;
 		$html = HTML::Entities::decode($html);
-		$html =~ s/ +/ /g;
+		$html =~ s/\s+/ /g;
 		push @{$attr_ref->{'content'}}, $html;
 	}
-	elsif($mime_type =~ m{^text/} or $mime_type =~ m{^application/x-(sh)$})
+	elsif($mime_type =~ m{^text/} or $mime_type =~ m{^application/(ics|x-(sh))$})
 	{
-		push @{$attr_ref->{'content'}}, $mime_part->body;
+		push @{$attr_ref->{'content'}}, encode_utf8($mime_part->body);
 	}
-	elsif($mime_type =~ m{^(image|video)/})
+	elsif($mime_type ~~ @non_textual_types)
 	{
-		# not supported
+		# nothing to index
 	}
 	elsif($mime_type =~ m{^application/(x-)?pdf$})
 	{
@@ -85,6 +87,14 @@ sub harvest_data
 	elsif($mime_type eq 'application/msword')
 	{
 		@filter_cmd = qw{catdoc -w -x};
+	}
+	elsif($mime_type eq 'application/vnd.ms-excel')
+	{
+		@filter_cmd = qw{xls2csv -x /dev/stdin};
+	}
+	elsif($mime_type eq 'application/vnd.ms-powerpoint')
+	{
+		@filter_cmd = qw{catppt /dev/stdin};
 	}
 #	elsif($mime_type =~ m{application/x-(7z-compressed|gzip|bzip|compressed|compressed-tar|tar)$})
 #	{
@@ -121,6 +131,11 @@ sub harvest_data
 		
 		waitpid( $pid, 0 );
 		my $child_exit_status = $? >> 8;
+		
+		if($child_exit_status != 0)
+		{
+			warn "error $child_exit_status while running @filter_cmd\n";
+		}
 	}
 	
 	
