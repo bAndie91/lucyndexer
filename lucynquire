@@ -10,6 +10,36 @@ use LucyX::Suggester;
 use Encode qw/decode_utf8 encode_utf8/;
 
 
+sub dump_query;
+
+sub dump_query
+{
+	my $q = shift;
+	my @children;
+	my %glue = (
+		'Lucy::Search::ORQuery' => ' OR ',
+		'Lucy::Search::ANDQuery' => ' AND ',
+		'Lucy::Search::NOTQuery' => ' NOT ',
+	);
+	
+	for my $sq (@{$q->{children}})
+	{
+		push @children, dump_query $sq;
+	}
+	if(@children) {
+		return sprintf "(%s)", join $glue{$q->{_class}}, @children;
+	}
+	else {
+		my $term;
+		if(exists $q->{term}) {
+			$term = $q->{term};
+		}else{
+			$term = sprintf "\"%s\"", join " ", @{$q->{terms}};
+		}
+		return sprintf "%s:%s", $q->{field}, $term;
+	}
+}
+
 
 my $index_path = $ARGV[0] || die;
 shift @ARGV;
@@ -34,7 +64,8 @@ $query_parser->set_heed_colons(1);
 
 $search_query =~ s/,/ OR /g;
 my $query = $query_parser->parse($search_query);
-#warn Dumper $query->dump;
+my $parsed_query_string = dump_query $query->dump;
+#warn Dumper $query->dump, $parsed_query_string;
 
 my $hits = $index->hits(
 	query      => $query,
@@ -46,7 +77,7 @@ my $hits = $index->hits(
 my $suggester = LucyX::Suggester->new( indexes => [ $index_path ] );
 my $suggestions = $suggester->suggest($search_query);
 
-printf "query %s\n", $search_query;
+printf "query %s\n", $parsed_query_string;
 printf "total %s\n", $hits->total_hits;
 printf "suggestion %s\n", encode_utf8($_) for @$suggestions;
 print "\n";

@@ -29,7 +29,7 @@ my $type_attribute = Lucy::Plan::FullTextType->new(
 	analyzer => $analyzer,
 	indexed => 1,
 	stored => 1,
-	sortable => 1,
+	sortable => 0,
 );
 my $type_content = Lucy::Plan::FullTextType->new(
 	analyzer => $analyzer,
