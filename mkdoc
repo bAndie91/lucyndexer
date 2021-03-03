@@ -7,6 +7,9 @@ use HTML::Entities;
 use IPC::Open2;
 #use Archive::Zip;
 
+binmode STDIN,  ':utf8';
+binmode STDOUT, ':utf8';
+
 @title_headers = ('Subject');
 @sender_headers = ('From', 'Sender', 'X-Sender', 'Return-Path', 'Reply-To');
 @recipient_headers = ('To', 'Cc', 'Delivered-To');
@@ -34,7 +37,6 @@ sub harvest_data
 		push @{$attr_ref->{$attr}},
 			uniq
 			grep {$_}
-			map {encode_utf8($_)}
 			map {join "\n", $mime_part->header($_)}
 			@header_names;
 	}
@@ -51,7 +53,7 @@ sub harvest_data
 	
 	if($part_name)
 	{
-		push @{$attr_ref->{'attachment'}}, encode_utf8("$part_name $mime_type");
+		push @{$attr_ref->{'attachment'}}, "$part_name $mime_type";
 	}
 	
 	
@@ -124,7 +126,7 @@ sub harvest_data
 	if(@filter_cmd)
 	{
 		my $pid = open2(my $filter_out, my $filter_in, @filter_cmd);
-		print {$filter_in} $mime_part->body_str;
+		print {$filter_in} $mime_part->body;
 		close $filter_in;
 		local $/ = undef;
 		push @{$attr_ref->{'content'}}, <$filter_out>;
@@ -146,6 +148,7 @@ sub harvest_data
 for my $filepath (<STDIN>)
 {
 	chomp $filepath;
+	$filepath = encode_utf8 $filepath;
 	my $rawmail;
 	
 	{
