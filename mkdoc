@@ -5,7 +5,9 @@ use Email::MIME;
 use Encode qw/decode_utf8 encode_utf8/;
 use HTML::Entities;
 use IPC::Open2;
+#use Archive::Zip;
 
+@title_headers = ('Subject');
 @sender_headers = ('From', 'Sender', 'X-Sender', 'Return-Path', 'Reply-To');
 @recipient_headers = ('To', 'Cc', 'Delivered-To');
 
@@ -13,6 +15,116 @@ use IPC::Open2;
 sub uniq
 {
 	return keys { map {$_=>undef} @_ };
+}
+
+
+sub harvest_data;
+
+sub harvest_data
+{
+	my $filepath = shift;
+	my $mime_part = shift;
+	my $attr_ref = shift;
+	
+	
+	for my $attr ('title', 'sender', 'recipient')
+	{
+		my @header_names = @{$attr."_headers"};
+		push @{$attr_ref->{$attr}},
+			uniq
+			grep {$_}
+			map {encode_utf8($_)}
+			map {join "\n", $mime_part->header($_)}
+			@header_names;
+	}
+	
+	
+	my ($mime_type) = $mime_part->content_type =~ /^([^;]+)/;
+	$mime_type = lc $mime_type;
+	$mime_type = 'text/plain' if not $mime_type;
+	my $part_name = $mime_part->filename;
+	my @filter_cmd = ();
+	my @subparts = $mime_part->subparts;
+	
+	
+	if($part_name)
+	{
+		push @{$attr_ref->{'attachment'}}, encode_utf8("$part_name $mime_type");
+	}
+	
+	
+	if($mime_type eq 'text/html')
+	{
+		my $html = $mime_part->body;
+		# a good enough html parser
+		$html =~ s{<(style|script)\b.*?(</(?1)\b.*>)}{}gis;
+		$html =~ s{</?(td|tr|th|form|br|hr|p)\b.*?>}{ }g;
+		$html =~ s{<img[^>]*\balt=([^'"`]\S*|.[^'"`]*).*?>}{ $1 }g;
+		$html =~ s{<table[^>]*\bsummary=([^'"`]\S*|.[^'"`]*).*?>}{ $1 }g;
+		$html =~ s{<.*?>}{}g;
+		$html = HTML::Entities::decode($html);
+		$html =~ s/ +/ /g;
+		push @{$attr_ref->{'content'}}, $html;
+	}
+	elsif($mime_type =~ m{^text/} or $mime_type =~ m{^application/x-(sh)$})
+	{
+		push @{$attr_ref->{'content'}}, $mime_part->body;
+	}
+	elsif($mime_type =~ m{^(image|video)/})
+	{
+		# not supported
+	}
+	elsif($mime_type =~ m{^application/(x-)?pdf$})
+	{
+		@filter_cmd = qw{pdftotext --strict-format - -};
+	}
+	elsif($mime_type eq 'application/rtf')
+	{
+		@filter_cmd = qw{unrtf --text /dev/stdin};
+	}
+	elsif($mime_type eq 'application/msword')
+	{
+		@filter_cmd = qw{catdoc -w -x};
+	}
+#	elsif($mime_type =~ m{application/x-(7z-compressed|gzip|bzip|compressed|compressed-tar|tar)$})
+#	{
+#		@filter_cmd = qw{gunzip -c};  ... untar ... for file in tar ...
+#	}
+#	elsif($mime_type =~ m{application/(x-)?zip(-compressed)?$})
+#	{
+#		my $zip = Archive::Zip->new();
+#		$zip->read();
+#		for $zip->memberNames;
+#		$fh = Archive::Zip::MemberRead->new($zip, $member);
+#		$fh->getline;
+#	}
+	elsif($mime_type =~ m{^message/})
+	{
+		my $email = Email::MIME->new($mime_part->body);
+		harvest_data($filepath, $email, $attr_ref);
+	}
+	else
+	{
+		if(not @subparts)
+		{
+			warn "$filepath: unsupported MIME attachment $mime_type\n";
+		}
+	}
+	
+	if(@filter_cmd)
+	{
+		my $pid = open2(my $filter_out, my $filter_in, @filter_cmd);
+		print {$filter_in} $mime_part->body;
+		close $filter_in;
+		local $/ = undef;
+		push @{$attr_ref->{'content'}}, <$filter_out>;
+		
+		waitpid( $pid, 0 );
+		my $child_exit_status = $? >> 8;
+	}
+	
+	
+	harvest_data($filepath, $_, $attr_ref) for @subparts;
 }
 
 
@@ -29,83 +141,14 @@ for my $filepath (<STDIN>)
 	}
 	my $email = Email::MIME->new($rawmail);
 	
-	
 	my %attribute;
-	
-	$attribute{title} = encode_utf8(join "\n", $email->header('Subject'));
-	$attribute{sender} = encode_utf8(join "\n", grep {$_} map {join "\n", $email->header($_)} @sender_headers);
-	$attribute{recipient} = encode_utf8(join "\n", grep {$_} map {join "\n", $email->header($_)} @recipient_headers);
-	
-	@mime_parts = $email->subparts;
-	if(@mime_parts == 0)
-	{
-		$attribute{content} = join "\n", $email->body;
-	}
-	else {
-		for my $part (@mime_parts)
-		{
-			my ($mime_type) = $part->content_type =~ /^([^;]+)/;
-			my $attachment_name = $part->filename;
-			my @filter_cmd = ();
-			
-			if($attachment_name)
-			{
-				push @{$attribute{attachment}}, "$attachment_name $mime_type";
-			}
-			
-			if($mime_type eq 'text/plain')
-			{
-				push @{$attribute{content}}, $part->body;
-			}
-			elsif($mime_type eq 'text/html')
-			{
-				my $html = $part->body;
-				# a good enough html parser
-				$html =~ s{<(style|script)\b.*?(</(?1)\b.*>)}{}gis;
-				$html =~ s{</?(td|tr|th|form|br|hr|p)\b.*?>}{ }g;
-				$html =~ s{<img[^>]*\balt=([^'"`]\S*|.[^'"`]*).*?>}{ $1 }g;
-				$html =~ s{<table[^>]*\bsummary=([^'"`]\S*|.[^'"`]*).*?>}{ $1 }g;
-				$html =~ s{<.*?>}{}g;
-				$html = HTML::Entities::decode($html);
-				$html =~ s/ +/ /g;
-				push @{$attribute{content}}, $html;
-			}
-			elsif($mime_type =~ m{^(image|video)/})
-			{ }
-			elsif($mime_type eq 'application/pdf') {
-				@filter_cmd = qw{pdftotext --strict-format - -};
-			}
-			elsif($mime_type eq 'application/rtf') {
-				@filter_cmd = qw{unrtf --text /dev/stdin};
-			}
-			else
-			{
-				warn "$filepath: unsupported MIME attachment $mime_type\n";
-			}
-			
-			if(@filter_cmd)
-			{
-				my $pid = open2(my $filter_out, my $filter_in, @filter_cmd);
-				print {$filter_in} $part->body;
-				close $filter_in;
-				local $/ = undef;
-				push @{$attribute{content}}, <$filter_out>;
-				
-				waitpid( $pid, 0 );
-				my $child_exit_status = $? >> 8;
-			}
-		}
-		
-		$attribute{attachment} = encode_utf8( join "\n", @{$attribute{attachment}} ) if $attribute{attachment};
-		$attribute{content} = join "\n", @{$attribute{content}} if $attribute{content};
-	}
-	
+	harvest_data($filepath, $email, \%attribute);
 	
 	
 	print "location $_\n" for split /\n/, $filepath;
 	for my $attr (keys %attribute)
 	{
-		print "$attr $_\n" for split /\n/, $attribute{$attr};
+		print "$attr $_\n" for split /\n/, join "\n", @{$attribute{$attr}};
 	}
 	print "end\n";
 }
