@@ -1,13 +1,14 @@
 #!/usr/bin/env perl
 
 use lib './lib';
-#use Lucy::Simple;
 use Lucy::Search::IndexSearcher;
-#use Lucy::Search::SortSpec;
-#use Lucy::Search::SortRule;
 use Data::Dumper;
 use LucyX::Suggester;
 use Encode qw/decode_utf8 encode_utf8/;
+
+binmode STDIN,  ':utf8';
+binmode STDOUT, ':utf8';
+binmode STDERR, ':utf8';
 
 
 sub dump_query;
@@ -52,11 +53,11 @@ sub dump_query
 my $index_path = $ARGV[0] || die;
 shift @ARGV;
 @ARGV or die "Usage: $0 <index-path> [search-terms...]\n";
-my $search_query = join " ", @ARGV;
+my $search_query = decode_utf8 join " ", @ARGV;
 
 
 my $index = Lucy::Search::IndexSearcher->new(index => $index_path);
- 
+
 #my $sort_spec = Lucy::Search::SortSpec->new(
 #	rules => [
 #		Lucy::Search::SortRule->new( field => 'date' ),
@@ -95,7 +96,7 @@ while( my $hit = $hits->next )
 	printf "score %.2f\n", $hit->get_score;
 	for my $attribute (sort keys %$hit)
 	{
-		printf "%s %s\n", $attribute, split /\n/, $hit->{$attribute};
+		printf "%s %s\n", $attribute, $_ for split /\n/, $hit->{$attribute};
 	}
 	print "\n";
 }

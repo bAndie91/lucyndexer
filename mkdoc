@@ -51,6 +51,7 @@ sub harvest_data
 		push @{$attr_ref->{$attr}},
 			uniq
 			grep {$_}
+			split /\n/, join "\n",
 			map {join "\n", $mime_part->header($_)}
 			@header_names;
 	}
