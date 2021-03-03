@@ -6,6 +6,9 @@ use Encode qw/decode_utf8 encode_utf8/;
 use HTML::Entities;
 use IPC::Open2;
 #use Archive::Zip;
+use Carp 'verbose';
+$SIG{ __DIE__ } = \&Carp::confess;
+$Carp::MaxArgLen = 512;
 
 binmode STDIN,  ':utf8';
 binmode STDOUT, ':utf8';
@@ -21,6 +24,14 @@ sub uniq
 	return keys { map {$_=>undef} @_ };
 }
 
+
+sub get_body_safe
+{
+	my $email = shift;
+	my $body;
+	eval { $body = $email->body_str; 1; } or $body = $email->body;
+	return $body;
+}
 
 sub harvest_data;
 
@@ -59,7 +70,7 @@ sub harvest_data
 	
 	if($mime_type eq 'text/html')
 	{
-		my $html = $mime_part->body_str;
+		my $html = get_body_safe $mime_part;
 		# a good enough html parser
 		$html =~ s{<(style|script)\b.*?(</(?1)\b.*?>)}{}gis;
 		$html =~ s{</?(td|tr|th|form|br|hr|p)\b.*?>}{ }gi;
@@ -72,7 +83,7 @@ sub harvest_data
 	}
 	elsif($mime_type =~ m{^text/} or $mime_type =~ m{^application/(ics|x-(sh))$})
 	{
-		push @{$attr_ref->{'content'}}, $mime_part->body_str;
+		push @{$attr_ref->{'content'}}, get_body_safe $mime_part;
 	}
 	elsif($mime_type ~~ @non_textual_types)
 	{
@@ -148,7 +159,7 @@ sub harvest_data
 for my $filepath (<STDIN>)
 {
 	chomp $filepath;
-	$filepath = encode_utf8 $filepath;
+	$filepath = $filepath;
 	my $rawmail;
 	
 	{
