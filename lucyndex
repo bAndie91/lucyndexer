@@ -7,13 +7,15 @@ use Lucy::Plan::FullTextType;
 use Lucy::Analysis::EasyAnalyzer;
 use Data::Dumper;
 
+binmode STDIN,  ':utf8';
+binmode STDOUT, ':utf8';
+binmode STDERR, ':utf8';
 
-my $index_path = $ARGV[0] || die;
 
 
 my $schema = Lucy::Plan::Schema->new;
-my $tokenizer = Lucy::Analysis::StandardTokenizer->new;
 my $normalizer = Lucy::Analysis::Normalizer->new( normalization_form => 'NFKC', case_fold => 1, strip_accents => 1 );
+my $tokenizer = Lucy::Analysis::StandardTokenizer->new;
 my $stemmer_1 = Lucy::Analysis::SnowballStemmer->new( language => 'hu' );
 my $stemmer_2 = Lucy::Analysis::SnowballStemmer->new( language => 'en' );
 my $stopfilter_1 = Lucy::Analysis::SnowballStopFilter->new( language => 'hu' );
@@ -44,6 +46,7 @@ $schema->spec_field( name => 'title', type => $type_attribute );
 $schema->spec_field( name => 'content', type => $type_content );
 
 
+my $index_path = $ARGV[0] || die "Usage: $0 <index-path>\n";
 my $indexer;
 eval {
 	$indexer = Lucy::Index::Indexer->new(

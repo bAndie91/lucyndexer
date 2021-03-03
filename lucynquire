@@ -16,10 +16,12 @@ sub dump_query
 {
 	my $q = shift;
 	my @children;
+	my %prefix = (
+		'Lucy::Search::NOTQuery' => 'NOT ',
+	);
 	my %glue = (
 		'Lucy::Search::ORQuery' => ' OR ',
 		'Lucy::Search::ANDQuery' => ' AND ',
-		'Lucy::Search::NOTQuery' => ' NOT ',
 	);
 	
 	for my $sq (@{$q->{children}})
@@ -27,14 +29,20 @@ sub dump_query
 		push @children, dump_query $sq;
 	}
 	if(@children) {
-		return sprintf "(%s)", join $glue{$q->{_class}}, @children;
+		my $children;
+		if(@children == 1) {
+			$children = $children[0];
+		}else{
+			$children = sprintf "(%s)", join $glue{$q->{_class}}, @children;
+		}
+		return sprintf "%s%s", $prefix{$q->{_class}}, $children;
 	}
 	else {
 		my $term;
-		if(exists $q->{term}) {
-			$term = $q->{term};
+		if(exists $q->{terms}) {
+			$term = join "*", @{$q->{terms}};
 		}else{
-			$term = sprintf "\"%s\"", join " ", @{$q->{terms}};
+			$term = $q->{term};
 		}
 		return sprintf "%s:%s", $q->{field}, $term;
 	}
@@ -43,7 +51,7 @@ sub dump_query
 
 my $index_path = $ARGV[0] || die;
 shift @ARGV;
-@ARGV or die "Usage: $0 <index-location> [search-terms...]\n";
+@ARGV or die "Usage: $0 <index-path> [search-terms...]\n";
 my $search_query = join " ", @ARGV;
 
 
