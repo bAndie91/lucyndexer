@@ -1,0 +1,12 @@
+{
+    "host_module": "Clownfish",
+    "classes": {
+        "Clownfish::Obj": {
+            "methods": {
+                "Destroy": {
+                    "alias": "DESTROY"
+                }
+            }
+        }
+    }
+}
