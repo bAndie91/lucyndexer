@@ -5,6 +5,7 @@ use Lucy::Search::IndexSearcher;
 use Data::Dumper;
 use LucyX::Suggester;
 use Encode qw/decode_utf8 encode_utf8/;
+use Lucy::Search::PrefixQueryParser;
 
 binmode STDIN,  ':utf8';
 binmode STDOUT, ':utf8';
@@ -65,7 +66,7 @@ my $index = Lucy::Search::IndexSearcher->new(index => $index_path);
 #	],
 #);
 
-my $query_parser = Lucy::Search::QueryParser->new(
+my $query_parser = Lucy::Search::PrefixQueryParser->new(
 	schema         => $index->get_schema,
 	default_boolop => 'AND',
 );
@@ -74,14 +75,13 @@ $query_parser->set_heed_colons(1);
 $search_query =~ s/,/ OR /g;
 my $query = $query_parser->parse($search_query);
 my $parsed_query_string = dump_query $query->dump;
-#warn Dumper $query->dump, $parsed_query_string;
+#warn Dumper $query->dump;
 #warn Dumper $index->get_schema->dump;
 
 my $hits = $index->hits(
 	query      => $query,
 	offset     => 0,
 	num_wanted => 25,
-	#sort_spec  => $sort_spec,
 );
 
 my $suggester = LucyX::Suggester->new( indexes => [ $index_path ] );
@@ -101,23 +101,3 @@ while( my $hit = $hits->next )
 	}
 	print "\n";
 }
-
-
-
-#use Lucy::Highlight::Highlighter;
-#
-#my $searcher = Lucy::Search::IndexSearcher->new( 
-#    index => $index_path,
-#);
-#my $hits = $searcher->hits(query => $search_query, offset => 0, num_wanted=> 10,);
-#my $highlighter = Lucy::Highlight::Highlighter->new(
-#	searcher => $searcher,
-#	query    => $search_query,
-#	field    => 'content',
-#	excerpt_length => 200,
-#);
-#while ( my $hit = $hits->next ) {
-#    my $excerpt = $highlighter->create_excerpt($hit);
-#    print Dumper $hit;
-#    print $excerpt;
-#}
