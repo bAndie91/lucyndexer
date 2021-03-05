@@ -4,6 +4,9 @@ set -e
 set -o pipefail
 set -u
 
+selfdir=`dirname "$(readlink -f "$0")"`
+export PERL5LIB=$selfdir/lib:$PERL5LIB
+
 timestampfile=~/Mail/.lucyndex-last-indexing-started
 date -R > "$timestampfile.new"
 
@@ -12,7 +15,7 @@ then
 	echo "indexing Emails since $(cat "$timestampfile")" >&2
 fi
 
-find ~/Mail/new/ \( -type d \( \
+find "$MAILS_ROOT_PATH" \( -type d \( \
 	-iname spam -or -iname trash -or -iname kuka -or -iname 'törölt elemek' \
 	-or -name .getmail \
 	\) -prune -false \) -or \( \
@@ -20,7 +23,7 @@ find ~/Mail/new/ \( -type d \( \
 	-type f \
 	! -name maildirfs.cache \
 	\) |\
-./mkdoc |\
-./lucyndex index/
+"$selfdir"/mkdoc |\
+"$selfdir"/lucyndex "$LUCY_INDEX_PATH"
 
 mv "$timestampfile.new" "$timestampfile"

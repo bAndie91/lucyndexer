@@ -1,6 +1,5 @@
 #!/usr/bin/env perl
 
-use lib './lib';
 use Lucy::Search::IndexSearcher;
 use Data::Dumper;
 use LucyX::Suggester;
