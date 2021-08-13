@@ -11,15 +11,14 @@ binmode STDOUT, ':utf8';
 binmode STDERR, ':utf8';
 
 
+my $lang = $ENV{'LUCYNDEX_LANG'};
 
 my $schema = Lucy::Plan::Schema->new;
 my $tokenizer = Lucy::Analysis::RegexTokenizer->new( pattern => '\w+' );
-my $stopfilter_hu = Lucy::Analysis::SnowballStopFilter->new( language => 'hu' );
-my $stopfilter_en = Lucy::Analysis::SnowballStopFilter->new( language => 'en' );
-my $stemmer_hu = Lucy::Analysis::SnowballStemmer->new( language => 'hu' );
-my $stemmer_en = Lucy::Analysis::SnowballStemmer->new( language => 'en' );
+my $stopfilter = Lucy::Analysis::SnowballStopFilter->new( language => $lang );
+my $stemmer = Lucy::Analysis::SnowballStemmer->new( language => $lang );
 my $normalizer = Lucy::Analysis::Normalizer->new( normalization_form => 'NFKC', case_fold => 1, strip_accents => 1 );
-my $analyzer = Lucy::Analysis::PolyAnalyzer->new(analyzers => [ $tokenizer, $stopfilter_hu, $stopfilter_en, $stemmer_hu, $stemmer_en, $normalizer, ]);
+my $analyzer = Lucy::Analysis::PolyAnalyzer->new(analyzers => [ $tokenizer, $stopfilter, $stemmer, $normalizer, ]);
 
 my $type_location = Lucy::Plan::StringType->new(
 	indexed => 0,
@@ -45,7 +44,7 @@ $schema->spec_field( name => 'title', type => $type_attribute );
 $schema->spec_field( name => 'content', type => $type_content );
 
 
-my $index_path = $ARGV[0] || die "Usage: $0 <index-path>\n";
+my $index_path = $ARGV[0] || die "Usage: LUCYNDEX_LANG=<lc> $0 <index-path>\n";
 my $indexer;
 eval {
 	$indexer = Lucy::Index::Indexer->new(
