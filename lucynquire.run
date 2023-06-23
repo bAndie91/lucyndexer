@@ -1,5 +1,4 @@
 #!/bin/bash
 
-installdir=/opt/lucyndexer
-export PERL5LIB=$installdir/lib:$PERL5LIB
-exec $installdir/lucynquire "$@"
+LIB_TARGET_DIR=.
+PERL5LIB=$LIB_TARGET_DIR/lib:$PERL5LIB exec "$LIB_TARGET_DIR"/lucynquire "$@"
