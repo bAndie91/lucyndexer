@@ -22,7 +22,7 @@ $(LIB_TARGET_FILES): $(LIB_TARGET_DIR)/%: %
 	@echo remove $@ >> uninstall.sh
 
 $(LIB_TARGET_DIR)/lib: $(LIB_TARGET_DIR)
-	rsync -r -i ./lib/ $@/
+	rsync -r -tp -i ./lib/ $@/
 	@echo remove $@ >> uninstall.sh
 
 $(BIN_TARGET_DIR)/lucynquire: lucynquire.run
