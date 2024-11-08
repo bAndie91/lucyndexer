@@ -8,7 +8,7 @@ FILES = index-mails lucyndex lucynquire mkdoc
 LIB_TARGET_FILES = $(foreach filename,$(FILES),$(LIB_TARGET_DIR)/$(filename))
 
 
-install-all: $(LIB_TARGET_FILES) $(LIB_TARGET_DIR)/lib/ $(BIN_TARGET_DIR)/lucynquire
+install-all: $(LIB_TARGET_FILES) $(LIB_TARGET_DIR)/lib $(BIN_TARGET_DIR)/lucynquire
 
 
 $(LIB_TARGET_DIR):
