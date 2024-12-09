@@ -29,3 +29,11 @@ $(BIN_TARGET_DIR)/lucynquire: lucynquire.run
 	@cat lucynquire.run | sed -e 's#LIB_TARGET_DIR=.#LIB_TARGET_DIR=$(LIB_TARGET_DIR)#' > $@
 	@chmod +x $@
 	@echo remove $@ >> uninstall.sh
+
+install-perl-binary-dependencies:
+	cpan Clownfish
+	cpan Lucy
+	cpan Search::Tools
+	cpan Sub::Identify
+	cpan Text::Aspell
+	cpan Variable::Magic
