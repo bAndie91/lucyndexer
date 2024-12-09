@@ -7,8 +7,9 @@ set -u
 selfdir=`dirname "$(readlink -f "$0")"`
 export PERL5LIB=$selfdir/lib:${PERL5LIB:-}
 
-# assert LUCYNDEX_LANG is set
+# assert variables are set
 true "$LUCYNDEX_LANG"
+true "$LUCY_INDEX_PATH"
 
 timestampfile=$LUCY_INDEX_PATH/last-indexing-started
 date -R > "$timestampfile.new"
