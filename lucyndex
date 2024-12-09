@@ -12,6 +12,7 @@ binmode STDERR, ':utf8';
 
 
 my $lang = $ENV{'LUCYNDEX_LANG'};
+my $index_path = $ARGV[0] || die "Usage: LUCYNDEX_LANG=<lc> $0 <index-path>\n";
 
 my $schema = Lucy::Plan::Schema->new;
 my $tokenizer = Lucy::Analysis::RegexTokenizer->new( pattern => '\w+' );
@@ -44,7 +45,6 @@ $schema->spec_field( name => 'title', type => $type_attribute );
 $schema->spec_field( name => 'content', type => $type_content );
 
 
-my $index_path = $ARGV[0] || die "Usage: LUCYNDEX_LANG=<lc> $0 <index-path>\n";
 my $indexer;
 eval {
 	$indexer = Lucy::Index::Indexer->new(

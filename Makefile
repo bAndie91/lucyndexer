@@ -39,3 +39,10 @@ install-perl-binary-dependencies:
 	cpan Sub::Identify
 	cpan Text::Aspell
 	cpan Variable::Magic
+
+install-text-extractors:
+	type pdftotext || apt install poppler-utils
+	type unrtf || apt install unrtf
+	type catdoc || apt install catdoc
+	type xls2csv || apt install catdoc
+	type catppt || apt install catppt
