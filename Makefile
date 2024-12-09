@@ -8,6 +8,7 @@ FILES = index-mails lucyndex lucynquire mkdoc
 LIB_TARGET_FILES = $(foreach filename,$(FILES),$(LIB_TARGET_DIR)/$(filename))
 
 
+.PHONY: install-all
 install-all: $(LIB_TARGET_FILES) $(LIB_TARGET_DIR)/lib $(BIN_TARGET_DIR)/lucynquire
 
 
@@ -30,6 +31,7 @@ $(BIN_TARGET_DIR)/lucynquire: lucynquire.run
 	@chmod +x $@
 	@echo remove $@ >> uninstall.sh
 
+.PHONY: install-perl-binary-dependencies
 install-perl-binary-dependencies:
 	cpan Clownfish
 	cpan Lucy
