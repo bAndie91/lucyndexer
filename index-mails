@@ -4,31 +4,29 @@ set -e
 set -o pipefail
 set -u
 
-selfdir=`dirname "$(readlink -f "$0")"`
-export PERL5LIB=$selfdir/lib:${PERL5LIB:-}
+scriptdir=`dirname "$(readlink -f "$0")"`
+export PERL5LIB=$scriptdir/lib:${PERL5LIB:-}
 
 # assert variables are set
-true "$LUCYNDEX_LANG"
-true "$LUCY_INDEX_PATH"
+[ -n "$LUCYNDEX_LANG" ]
+[ -n "$LUCY_INDEX_PATH" ]
 
-# TODO replace with trackrun
-timestampfile=$LUCY_INDEX_PATH/last-indexing-started
-date -R > "$timestampfile.new"
+echo "indexing Emails since $TRACKRUN_LAST_SUCCESSFUL_STARTED" >&2
 
-if [ -s "$timestampfile" ]
-then
-	echo "indexing Emails since $(cat "$timestampfile")" >&2
-fi
+strip_leading_dot_slash()
+{
+	cut -c 3-
+}
 
-find "$MAILS_ROOT_PATH" \( -type d \( \
-	-iname spam -or -iname trash -or -iname kuka -or -iname 'törölt elemek' \
-	-or -name .getmail \
-	\) -prune -false \) -or \( \
-	-newer "$timestampfile" \
-	-type f \
-	! -name maildirfs.cache \
+find . \( \
+		-type d \
+		\( -iname spam -or -iname trash -or -iname kuka -or -iname 'törölt elemek' -or -name .getmail \) \
+		-prune -false \
+	\) -or \( \
+		-type f \
+		-newermt "$TRACKRUN_LAST_SUCCESSFUL_STARTED" \
+		! -name maildirfs.cache \
 	\) |\
-"$selfdir"/mkdoc |\
-"$selfdir"/lucyndex "$LUCY_INDEX_PATH"
-
-mv "$timestampfile.new" "$timestampfile"
+strip_leading_dot_slash |\
+"$scriptdir"/mkdoc |\
+"$scriptdir"/lucyndex "$LUCY_INDEX_PATH"

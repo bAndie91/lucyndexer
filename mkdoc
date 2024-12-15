@@ -2,28 +2,22 @@
 
 use Data::Dumper;
 use Email::MIME;
-use Encode qw/decode_utf8 encode_utf8/;
+use Encode qw/decode_utf8 encode_utf8 decode encode is_utf8/;
 use HTML::Entities;
+use POSIX;
 use IPC::Open2;
 #use Archive::Zip;
 use Carp 'verbose';
+use List::MoreUtils qw/uniq/;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 $SIG{ __DIE__ } = \&Carp::confess;
 $Carp::MaxArgLen = 512;
-
-binmode STDIN,  ':utf8';
-binmode STDOUT, ':utf8';
-binmode STDERR, ':utf8';
+$Email::MIME::ContentType::STRICT_PARAMS = 0;
 
 @title_headers = ('Subject');
 @sender_headers = ('From', 'Sender', 'X-Sender', 'Return-Path', 'Reply-To');
 @recipient_headers = ('To', 'Cc', 'Delivered-To');
 @non_textual_types = (qr{^(image|video|audio)/}, qr{^application/(x-)?(pgp|pkcs7)-signature$}, qr{^application/octet-?stream$});
-
-
-sub uniq
-{
-	return keys { map {$_=>undef} @_ };
-}
 
 
 sub get_body_safe
@@ -32,8 +26,15 @@ sub get_body_safe
 	my $body;
 	eval { $body = $email->body_str; 1; }
 	or eval { $body = $email->body; 1; }
-	or $body = decode_utf8 $email->body_raw;
+	or $body = $email->body_raw;
 	return $body;
+}
+
+sub ct2charset
+{
+	my $ct = shift;
+	$ct =~ /;\s*charset="?([^";]+)/ and return uc $1;
+	return '';
 }
 
 sub harvest_data;
@@ -52,7 +53,7 @@ sub harvest_data
 			uniq
 			grep {$_}
 			split /\n/, join "\n",
-			map {join "\n", $mime_part->header($_)}
+			map {join "\n", encode_utf8 $mime_part->header($_)}
 			@header_names;
 	}
 	
@@ -62,9 +63,11 @@ sub harvest_data
 	$mime_type = 'text/plain' if not $mime_type;
 	my $part_name = $mime_part->filename;
 	($part_name) = $mime_part->header('Content-ID') if not $part_name;
+	$part_name = decode('MIME-Header', $part_name);
+	$part_name = encode_utf8 $part_name if is_utf8($part_name);
+	my ($part_name_suffix) = lc($part_name) =~ /[^.]\.([^.]+)$/;
 	my @filter_cmd = ();
 	my @subparts = $mime_part->subparts;
-	
 	
 	if($part_name)
 	{
@@ -83,52 +86,62 @@ sub harvest_data
 		$html =~ s{<.*?>}{}gs;
 		$html = HTML::Entities::decode($html);
 		$html =~ s/\s+/ /g;
+		if(ct2charset($mime_part->content_type) eq 'UTF-8')
+		{
+			$html = encode_utf8 $html;
+		}
 		push @{$attr_ref->{'content'}}, $html;
 	}
 	elsif($mime_type =~ m{^text/} or $mime_type =~ m{^application/(ics|x-(sh))$})
 	{
-		push @{$attr_ref->{'content'}}, get_body_safe $mime_part;
+		my $text = get_body_safe($mime_part);
+		$text =~ s/\n+\s*/\n/gm;
+		push @{$attr_ref->{'content'}}, encode_utf8 $text;
 	}
-	elsif($mime_type ~~ @non_textual_types)
+	elsif($mime_type =~ m{^application/(x-)?pdf$} or $part_name_suffix eq 'pdf')
 	{
-		# nothing to index
+		@filter_cmd = ('triggerexec', 'stderr:Error: May not be a PDF file', 'perl:kill "INT", $COMMAND_PID', '--', 'pdftotext', '-', '-');
 	}
-	elsif($mime_type =~ m{^application/(x-)?pdf$})
-	{
-		@filter_cmd = qw{pdftotext --strict-format - -};
-	}
-	elsif($mime_type eq 'application/rtf')
+	elsif($mime_type eq 'application/rtf' or $part_name_suffix eq 'rtf')
 	{
 		@filter_cmd = qw{unrtf --text /dev/stdin};
 	}
-	elsif($mime_type eq 'application/msword')
+	elsif($mime_type eq 'application/msword' or $part_name_suffix eq 'doc')
 	{
 		@filter_cmd = qw{catdoc -w -x};
 	}
-	elsif($mime_type eq 'application/vnd.ms-excel')
+	elsif($mime_type eq 'application/vnd.ms-excel' or $part_name_suffix eq 'xls')
 	{
 		@filter_cmd = qw{xls2csv -x /dev/stdin};
 	}
-	elsif($mime_type eq 'application/vnd.ms-powerpoint')
+	elsif($mime_type eq 'application/vnd.ms-powerpoint' or $part_name_suffix eq 'ppt')
 	{
 		@filter_cmd = qw{catppt /dev/stdin};
 	}
-#	elsif($mime_type =~ m{application/x-(7z-compressed|gzip|bzip|compressed|compressed-tar|tar)$})
+#	elsif($mime_type =~ m{application/x-(7z-compressed|gzip|bzip|compressed|compressed-tar|tar)$} or $part_name_suffix ~~ ['gz', 'bz2', 'Z', 'tar', '7z'])
 #	{
 #		@filter_cmd = qw{gunzip -c};  ... untar ... for file in tar ...
 #	}
-#	elsif($mime_type =~ m{application/(x-)?zip(-compressed)?$})
-#	{
-#		my $zip = Archive::Zip->new();
-#		$zip->read();
-#		for $zip->memberNames;
-#		$fh = Archive::Zip::MemberRead->new($zip, $member);
-#		$fh->getline;
-#	}
+	elsif($mime_type =~ m{application/(x-)?zip(-compressed)?$} or $part_name_suffix =~ /^z(ip|\d\d)$/)
+	{
+		use Archive::Zip;
+		my $zip = Archive::Zip->new();
+		my $zipdata = $mime_part->body;
+		open my $h, '+<', \$zipdata;
+		$zip->readFromFileHandle($h);
+		push @{$attr_ref->{'attachment'}}, map {"$part_name $_"} $zip->memberNames;
+		close $h;
+		#$fh = Archive::Zip::MemberRead->new($zip, $member);
+		#$fh->getline;...
+	}
 	elsif($mime_type =~ m{^message/})
 	{
 		my $email = Email::MIME->new($mime_part->body);
 		harvest_data($filepath, $email, $attr_ref);
+	}
+	elsif($mime_type ~~ @non_textual_types)
+	{
+		# nothing to index
 	}
 	else
 	{
@@ -147,11 +160,11 @@ sub harvest_data
 		push @{$attr_ref->{'content'}}, <$filter_out>;
 		
 		waitpid( $pid, 0 );
-		my $child_exit_status = $? >> 8;
+		my $child_status = $?;
 		
-		if($child_exit_status != 0)
+		if($child_status != 0)
 		{
-			warn "error $child_exit_status while running @filter_cmd\n";
+			warn sprintf "error while running %s: exit code %d, signal %d\n", join(' ', @filter_cmd), WEXITSTATUS($child_status), WTERMSIG($child_status);
 		}
 	}
 	
@@ -172,6 +185,19 @@ for my $filepath (<STDIN>)
 		$rawmail = <$fh>;
 		close $fh;
 	}
+	
+	# Email::MIME (version 1.954) can not parse whitespace around equal sign:
+	# Illegal parameter 'charset = "utf-8"' at /usr/local/share/perl/5.36.0/Email/MIME/ContentType.pm line 398.
+	# Email::MIME::ContentType::_parse_attributes("; charset = \"utf-8\"") called at /usr/local/share/perl/5.36.0/Email/MIME/ContentType.pm line 121
+	$rawmail =~ s/^(Content-Type.*charset)\s*=\s*/$1=/mg;
+	# it mistakenly interprets CR+CR as end-of-headers.
+	# TODO: this CR+CR sequences may occour not only in the root MIME part, but also in any attachment's own headers. so this should be taken care of.
+	my ($rawmail_header, $rawmail_body) = split /\r\n\r\n/, $rawmail, 1;
+	$rawmail_header =~ s/\r\r/\r/g;
+	$rawmail = $rawmail_header . "\r\n\r\n" . $rawmail_body;
+	undef $rawmail_header;
+	undef $rawmail_body;
+	
 	my $email = Email::MIME->new($rawmail);
 	
 	my %attribute;
