@@ -11,8 +11,9 @@ export PERL5LIB=$scriptdir/lib:${PERL5LIB:-}
 [ -n "${1?Please specify the files and/or starting directory(ies) in command argument(s) to index email files}" ]
 [ -n "$LUCYNDEX_LANG" ]
 [ -n "$LUCY_INDEX_PATH" ]
+true "${TRACKRUN_LAST_SUCCESSFUL_STARTED?Need to be run by trackrun(1)}"
 
-echo "indexing Emails since $TRACKRUN_LAST_SUCCESSFUL_STARTED" >&2
+echo "indexing Emails since ${TRACKRUN_LAST_SUCCESSFUL_STARTED:-forever}" >&2
 
 strip_leading_dot_slash()
 {
