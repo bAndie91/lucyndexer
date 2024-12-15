@@ -6,10 +6,6 @@ use LucyX::Suggester;
 use Encode qw/decode_utf8 encode_utf8/;
 use Lucy::Search::PrefixQueryParser;
 
-binmode STDIN,  ':utf8';
-binmode STDOUT, ':utf8';
-binmode STDERR, ':utf8';
-
 
 sub dump_query;
 
