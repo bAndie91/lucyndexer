@@ -86,10 +86,7 @@ sub harvest_data
 		$html =~ s{<.*?>}{}gs;
 		$html = HTML::Entities::decode($html);
 		$html =~ s/\s+/ /g;
-		if(ct2charset($mime_part->content_type) eq 'UTF-8')
-		{
-			$html = encode_utf8 $html;
-		}
+		$html = encode_utf8 $html;
 		push @{$attr_ref->{'content'}}, $html;
 	}
 	elsif($mime_type =~ m{^text/} or $mime_type =~ m{^application/(ics|x-(sh))$})
