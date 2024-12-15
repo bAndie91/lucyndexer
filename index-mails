@@ -25,7 +25,7 @@ find . \( \
 		-prune -false \
 	\) -or \( \
 		-type f \
-		-newermt "$TRACKRUN_LAST_SUCCESSFUL_STARTED" \
+		${TRACKRUN_LAST_SUCCESSFUL_STARTED:+-newermt "$TRACKRUN_LAST_SUCCESSFUL_STARTED"} \
 		! -name maildirfs.cache \
 	\) |\
 strip_leading_dot_slash |\
