@@ -11,6 +11,7 @@ use Carp 'verbose';
 use List::MoreUtils qw/uniq/;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 $SIG{ __DIE__ } = \&Carp::confess;
+$SIG{ __WARN__ } = sub { warn "Error at file: $filepath\n"; &Carp::carp; };
 $Carp::MaxArgLen = 512;
 $Email::MIME::ContentType::STRICT_PARAMS = 0;
 
@@ -170,10 +171,10 @@ sub harvest_data
 }
 
 
-for my $filepath (<STDIN>)
+# $filepath is global
+for $filepath (<STDIN>)
 {
 	chomp $filepath;
-	$filepath = $filepath;
 	my $rawmail;
 	
 	{
