@@ -8,7 +8,6 @@ scriptdir=`dirname "$(readlink -f "$0")"`
 export PERL5LIB=$scriptdir/lib:${PERL5LIB:-}
 
 # assert variables are set
-[ -n "${1?Please specify the files and/or starting directory(ies) in command argument(s) to index email files}" ]
 [ -n "$LUCYNDEX_LANG" ]
 [ -n "$LUCY_INDEX_PATH" ]
 true "${TRACKRUN_LAST_SUCCESSFUL_STARTED?Need to be run by trackrun(1)}"
@@ -20,7 +19,7 @@ strip_leading_dot_slash()
 	cut -c 3-
 }
 
-find "$@" \( \
+find . \( \
 		-type d \
 		\( -iname spam -or -iname trash -or -iname kuka -or -iname 'törölt elemek' -or -name .getmail \) \
 		-prune -false \
