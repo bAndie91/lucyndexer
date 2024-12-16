@@ -6,7 +6,7 @@ use Encode qw/decode_utf8 encode_utf8 decode encode is_utf8/;
 use HTML::Entities;
 use POSIX;
 use IPC::Open2;
-#use Archive::Zip;
+use Archive::Zip;
 use Carp 'verbose';
 use List::MoreUtils qw/uniq/;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
@@ -30,6 +30,14 @@ sub get_body_safe
 	or eval { $body = $email->body; 1; }
 	or $body = $email->body_raw;
 	return $body;
+}
+
+sub load_zipfile
+{
+	my $zip = Archive::Zip->new();
+	open $zip->{zipdata_fh}, '+<', \$_[0];
+	$zip->readFromFileHandle($zip->{zipdata_fh});
+	return $zip;
 }
 
 sub ct2charset
@@ -120,7 +128,17 @@ sub harvest_data
 	}
 	elsif($part_name_suffix ~~ [qw/docx xlsx pptx ppsx/])
 	{
-#		@filter_cmd = unzip | **/*.xml | s/<.+?>/ /g; s/\s+/ /g
+		my $zip = load_zipfile($mime_part->body);
+		for my $archivedfile ($zip->memberNames)
+		{
+			if($archivedfile =~ /\.xml$/)
+			{
+				my $content = $zip->contents($archivedfile);
+				$content =~ s/<.+?>/ /g;
+				$content =~ s/\s+/ /g;
+				push @{$attr_ref->{'content'}}, $content;
+			}
+		}
 	}
 	elsif($mime_type eq 'application/vnd.oasis.opendocument.text' or $part_name_suffix eq 'odt')
 	{
@@ -136,13 +154,8 @@ sub harvest_data
 	}
 	elsif($mime_type =~ m{application/(x-)?zip(-compressed)?$} or $part_name_suffix =~ /^z(ip|\d\d)$/)
 	{
-		use Archive::Zip;
-		my $zip = Archive::Zip->new();
-		my $zipdata = $mime_part->body;
-		open my $h, '+<', \$zipdata;
-		$zip->readFromFileHandle($h);
+		my $zip = load_zipfile($mime_part->body);
 		push @{$attr_ref->{'attachment'}}, map {"$part_name $_"} $zip->memberNames;
-		close $h;
 		#$fh = Archive::Zip::MemberRead->new($zip, $member);
 		#$fh->getline;...
 	}
