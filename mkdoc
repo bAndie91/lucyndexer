@@ -100,7 +100,7 @@ sub harvest_data
 		$html = encode_utf8 $html;
 		push @{$attr_ref->{'content'}}, $html;
 	}
-	elsif($mime_type =~ m{^text/} or $mime_type =~ m{^application/(ics|x-(sh))$})
+	elsif($mime_type =~ m{^text/} or $mime_type =~ m{^application/(ics|x-(sh|php))$})
 	{
 		my $text = get_body_safe($mime_part);
 		$text =~ s/\n+\s*/\n/gm;
@@ -140,9 +140,15 @@ sub harvest_data
 			}
 		}
 	}
-	elsif($mime_type eq 'application/vnd.oasis.opendocument.text' or $part_name_suffix eq 'odt')
+	elsif($mime_type eq 'application/vnd.oasis.opendocument.text' or $part_name_suffix eq 'odt'
+		# could not find odg2txt specifically, but odt2txt extracts that sole content.xml just fine.
+		or $mime_type eq 'application/vnd.oasis.opendocument.graphics' or $part_name_suffix eq 'odg')
 	{
 		@filter_cmd = qw{seekstdin odt2txt /dev/stdin};
+	}
+	elsif($mime_type eq 'application/vnd.oasis.opendocument.spreadsheet' or $part_name_suffix eq 'ods')
+	{
+		@filter_cmd = qw{seekstdin ods2txt /dev/stdin};
 	}
 #	elsif($mime_type =~ m{application/x-(7z-compressed|gzip|bzip|compressed|compressed-tar|tar)$} or $part_name_suffix ~~ ['7z'])
 #	{
